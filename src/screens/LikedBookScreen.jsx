@@ -37,7 +37,7 @@ const LikedBooksScreen = () => {
 
   //navigate to book detail screen
   const onCardClick = (res, bookDetail) => {
-    navigation.navigate('BookDetails', {bookDetail});
+    navigation.navigate('Book Details', {bookDetail});
   };
 
   return (

@@ -1,20 +1,25 @@
-import React, {useState, useEffect} from 'react';
-import {View, TextInput, StyleSheet} from 'react-native';
+import React, {useState, useEffect, useRef} from 'react';
+import {View, TextInput, StyleSheet, SafeAreaView} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
+import Device from 'react-native-device-info';
 
 import BookList from './BookList';
-import {windowWidth, windowHeight} from '../common';
+import useDeviceOrientation from '../hooks/useDeviceOrientation';
 
 const MainScreen = () => {
-  const navigation = useNavigation();
+  const isTablet = Device.isTablet();
 
-  //define states
-  const [data, setData] = useState(null);
+  const navigation = useNavigation();
+  const {height, width, isPortrait} = useDeviceOrientation();
+  const [data, setData] = useState([]);
+  const [searchValue, setSearchValue] = useState('');
+  const pageNumber = useRef(0);
+  const fetchType = useRef('initialList');
 
   //side effects
   useEffect(() => {
     getData(
-      'https://openlibrary.org/subjects/sci-fi.json?details=true',
+      'https://openlibrary.org/subjects/sci-fi.json?details=true&limit=15&offset=0',
       'initialList',
     );
   }, []);
@@ -22,63 +27,103 @@ const MainScreen = () => {
   //getting data (all and liked)
   const getData = async (url, purpose) => {
     const resp = await fetch(url);
-    const data = await resp.json();
+    const respData = await resp.json();
 
     if (purpose === 'initialList') {
-      if (data.works.length) setData(data.works);
+      if (respData.works.length) {
+        setData(prevData => [...prevData, ...respData.works]);
+      }
     } else {
-      if (data.docs.length) setData(data.docs);
+      if (respData.docs.length) {
+        setData(prevData => [...prevData, ...respData.docs]);
+      }
     }
   };
 
   //search a book
   const searchBook = bookTitle => {
+    console.log(bookTitle.length);
     if (bookTitle.length > 3) {
+      if (fetchType.current !== 'search') {
+        fetchType.current = 'search';
+        pageNumber.current = 0;
+      }
+      if (bookTitle !== searchValue) {
+        setData([]);
+        setSearchValue(bookTitle);
+      }
       getData(
-        `https://openlibrary.org/search.json?title=${bookTitle}`,
+        `https://openlibrary.org/search.json?title=${bookTitle}&limit=15&offset=${pageNumber.current}`,
         'search',
       );
+    }
+    if (bookTitle.length === 0) {
+      setData([]);
+      getData(
+        'https://openlibrary.org/subjects/sci-fi.json?details=true&limit=15&offset=0',
+        'initialList',
+      );
+      fetchType.current = 'initialList';
+      pageNumber.current = 0;
+    }
+  };
+
+  const fetchMoreData = () => {
+    // console.log('pageNumber.current', pageNumber.current);
+    pageNumber.current = pageNumber.current + 15;
+    if (fetchType.current === 'initialList') {
+      getData(
+        `https://openlibrary.org/subjects/sci-fi.json?details=true&limit=15&offset=${pageNumber.current}`,
+        'initialList',
+      );
+    } else {
+      searchBook(searchValue);
     }
   };
 
   //navigate to details screen
   const onCardClick = (res, bookDetail) => {
-    navigation.navigate('BookDetails', {bookDetail});
+    navigation.navigate('Book Details', {bookDetail});
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.wrapperContainer}>
-        <View style={styles.searchContainer}>
-          <TextInput
-            onChangeText={searchBook}
-            placeholder="Search book by title"
-            style={styles.input}
-          />
-        </View>
+    <SafeAreaView style={styles.container}>
+      <View
+        style={[
+          styles.searchContainer,
+          {
+            width: width / 1.1,
+            height: !isPortrait || isTablet ? height / 10 : height / 20,
+          },
+        ]}>
+        <TextInput
+          onChangeText={searchBook}
+          placeholder="Search book by title"
+          style={styles.input}
+        />
       </View>
-      <BookList data={data} onCardClick={onCardClick} />
-    </View>
+      <BookList
+        data={data}
+        onCardClick={onCardClick}
+        fetchMoreData={fetchMoreData}
+      />
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
+    alignItems: 'center',
     flex: 1,
   },
-  wrapperContainer: {justifyContent: 'center', alignItems: 'center'},
   searchContainer: {
-    width: windowWidth / 1.2,
-    height: windowHeight / 15,
     backgroundColor: 'lightgrey',
     margin: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 100,
+    borderRadius: 10,
   },
   input: {
-    width: windowWidth / 1.3,
-    height: windowHeight / 20,
     margin: 10,
   },
   button: {
